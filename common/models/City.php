@@ -3,6 +3,9 @@
 namespace common\models;
 
 use Yii;
+use yii\behaviors\AttributeTypecastBehavior;
+use yii\db\ActiveQuery;
+use yii\db\ActiveRecord;
 
 /**
  * This is the model class for table "city".
@@ -17,12 +20,12 @@ use Yii;
  * @property Country $country
  * @property Weather[] $weathers
  */
-class City extends \yii\db\ActiveRecord
+class City extends ActiveRecord
 {
     /**
      * {@inheritdoc}
      */
-    public static function tableName()
+    public static function tableName(): string
     {
         return 'city';
     }
@@ -30,7 +33,7 @@ class City extends \yii\db\ActiveRecord
     /**
      * {@inheritdoc}
      */
-    public function rules()
+    public function rules(): array
     {
         return [
             [['country_id', 'name', 'lat', 'lon'], 'required'],
@@ -45,7 +48,7 @@ class City extends \yii\db\ActiveRecord
     /**
      * {@inheritdoc}
      */
-    public function attributeLabels()
+    public function attributeLabels(): array
     {
         return [
             'id' => 'ID',
@@ -60,9 +63,9 @@ class City extends \yii\db\ActiveRecord
     /**
      * Gets query for [[Country]].
      *
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      */
-    public function getCountry()
+    public function getCountry(): ActiveQuery
     {
         return $this->hasOne(Country::class, ['id' => 'country_id']);
     }
@@ -70,9 +73,9 @@ class City extends \yii\db\ActiveRecord
     /**
      * Gets query for [[Weathers]].
      *
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      */
-    public function getWeathers()
+    public function getWeathers(): ActiveQuery
     {
         return $this->hasMany(Weather::class, ['city_id' => 'id']);
     }
