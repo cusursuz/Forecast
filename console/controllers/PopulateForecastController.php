@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace console\controllers;
 
 use common\models\City;
@@ -14,10 +16,9 @@ class PopulateForecastController extends Controller
 {
     private string $appid = '1eacc92855029bcf2f5896154362f5fe';
     private string $baseApiUrl = "https://api.openweathermap.org/";
-    private string $cityApiParams = "geo/1.0/direct?q=%s,%s&limit=%s&appid=%s";
+    private string $cityApiParams = "geo/1.0/direct?q=%s,%s&limit=1&appid=%s";
     private string $forecastApiParams = "data/2.5/forecast?lat=%s&lon=%s&units=metric&appid=%s";
 
-    public int $limit = 1;
     public $country;
     public $city;
 
@@ -39,10 +40,12 @@ class PopulateForecastController extends Controller
     }
 
     /**
+     *  Populate weather forecast for the specified city.
+     *
      * @return void
      * @throws InvalidConfigException
      */
-    public function actionIndex()
+    public function actionIndex(): void
     {
         $cities = $this->getApiCities();
 
@@ -54,18 +57,32 @@ class PopulateForecastController extends Controller
 
         foreach ($cities as $city) {
             $country_id = $this->findOrCreateCountry($city->country);
-
-            $city_id = $this->findOrCreateCity($country_id, $city);
-
-            $this->updateOrCreateWeather($city_id, $this->getApiForecast($city->lat, $city->lon));
+            $city = $this->findOrCreateCity($country_id, $city);
+            $this->updateOrCreateWeather($city);
         }
     }
 
     /**
-     * @param $countryCode
+     *  Update weather forecast for all cities.
+     *
+     * @return void
+     * @throws InvalidConfigException
+     */
+    public function actionUpdate(): void
+    {
+        $cities = City::find()->all();
+        foreach ($cities as $city) {
+            $this->updateOrCreateWeather($city);
+        }
+    }
+
+    /**
+     *  Find or create a country.
+     *
+     * @param string $countryCode
      * @return int
      */
-    private function findOrCreateCountry($countryCode): int
+    private function findOrCreateCountry(string $countryCode): int
     {
         $country = Country::findOne(['country_code' => $countryCode]);
         if (!$country) {
@@ -79,11 +96,11 @@ class PopulateForecastController extends Controller
     }
 
     /**
-     * @param $countryId
-     * @param $cityData
-     * @return int
+     * @param int $countryId
+     * @param object $cityData
+     * @return City|null
      */
-    private function findOrCreateCity($countryId, $cityData): int
+    private function findOrCreateCity(int $countryId, object $cityData): ?City
     {
         $city = City::findOne(['country_id' => $countryId, 'name' => $cityData->name]);
         if (!$city) {
@@ -96,23 +113,25 @@ class PopulateForecastController extends Controller
             $city->save();
         }
         $this->stdout("City: $city->name \n", Console::FG_GREEN);
-        return $city->id;
+        return $city;
     }
 
     /**
-     * @param $cityId
-     * @param $weatherData
+     * @param City $city
      * @return void
      * @throws InvalidConfigException
      */
-    private function updateOrCreateWeather($cityId, $weatherData)
+    private function updateOrCreateWeather(City $city): void
     {
+        $weatherData = $this->getApiForecast((float) $city->lat, (float) $city->lon);
+        if (!$weatherData) return;
+
         foreach ($weatherData as $list) {
             $datetime = Yii::$app->formatter->asDatetime($list->dt, 'yyyy-MM-dd HH:mm:ss');
-            $weather = Weather::findOne(['city_id' => $cityId, 'datetime' => $datetime]);
+            $weather = Weather::findOne(['city_id' => $city->id, 'datetime' => $datetime]);
             if (!$weather) {
                 $weather = new Weather();
-                $weather->city_id = $cityId;
+                $weather->city_id = $city->id;
             }
             $weather->datetime = $datetime;
             $weather->temp_min = $list->main->temp_min;
@@ -121,7 +140,7 @@ class PopulateForecastController extends Controller
 
             $weather->save();
         }
-        $this->stdout("Populated with weathers data\n", Console::FG_GREEN);
+        $this->stdout("Populated $city->name with weathers data\n", Console::FG_GREEN);
     }
     /**
      * @return array
@@ -129,14 +148,19 @@ class PopulateForecastController extends Controller
     public function getApiCities(): array
     {
         $url = $this->baseApiUrl . $this->cityApiParams;
-        $url = sprintf($url, urlencode($this->city), urlencode($this->country), urlencode($this->limit), urlencode($this->appid));
+        $url = sprintf($url, urlencode($this->city), urlencode($this->country), urlencode($this->appid));
         return json_decode(file_get_contents($url));
     }
 
-    public function getApiForecast($lat, $lon): array
+    /**
+     * @param float $lat
+     * @param float $lon
+     * @return array
+     */
+    public function getApiForecast(float $lat, float $lon): array
     {
         $url = $this->baseApiUrl . $this->forecastApiParams;
-        $url = sprintf( $url, urlencode($lat), urlencode($lon), urlencode($this->appid));
+        $url = sprintf( $url, $lat, $lon, $this->appid);
         $forecast =  json_decode(file_get_contents($url));
         return $forecast->list;
     }
